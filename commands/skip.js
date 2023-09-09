@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { getQueue } = require('../util.js')
 
 module.exports = {
     data: new SlashCommandBuilder()

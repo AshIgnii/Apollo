@@ -44,12 +44,25 @@ client.on('interactionCreate', async interaction => {
     try {
         await interaction.deferReply()
         await command.execute(interaction)
-    } catch (e) {
-        let stack = e.stack.split('at')
-        console.log(chalk.bgRedBright('# An Error has ocurred while executing a command: ') + `\n\t Command: ${chalk.yellowBright(interaction.commandName)} \n\t Name: ${chalk.redBright(e.name)} \n\t Cause: ${chalk.redBright(e.cause)} \n\t Stack: ${chalk.redBright(stack[0] + '\t\t at' + stack[1].replace('\n', ''))}`)
-        interaction.editReply({content: 'Sorry! An Error has ocurred while executing this command :('})
+    } catch (err) {
+        logError(err, interaction.commandName)
+        interaction.editReply({ content: 'Sorry! An Error has ocurred while executing this command :(' })
     }
 })
+
+function logError(e, command) {
+    if (typeof command == 'undefined') {
+        command = 'Unknown'
+    }
+    if (typeof e.cause == 'undefined') {
+        e.cause = chalk.yellowBright('Unknown')
+    } else {
+        e.cause = chalk.redBright(e.cause)
+    }
+
+    let stack = e.stack.substring(0, 300).split('\n').join('\n\t\t') + '...'
+    console.log(chalk.bgRedBright('# An Error has ocurred while executing a command: ') + `\n\t Command: ${chalk.yellowBright(command)} \n\t Name: ${chalk.redBright(e.name)} \n\t Cause: ${e.cause} \n\t Stack: ${chalk.redBright(stack)}`)
+}
 
 //login
 client.login(token)
