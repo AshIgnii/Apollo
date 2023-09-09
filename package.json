@@ -1,0 +1,17 @@
+{
+  "name": "apollo",
+  "version": "0.0.1",
+  "description": "music bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ash",
+  "license": "MIT",
+  "dependencies": {
+    "@discordjs/voice": "^0.16.0",
+    "chalk": "4.1.2",
+    "discord.js": "^14.13.0",
+    "dotenv": "^16.3.1"
+  }
+}
