@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, SlashCommandStringOption } = require('discord.js')
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice')
-const { getQueue } = require('../util.js')
+const { getQueue, YTInput, queueTemplate } = require('../util.js')
 const fs = require('fs')
-const ytsr = require('ytsr');
+const ytdl = require('ytsr');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -17,6 +17,7 @@ module.exports = {
     async execute(interaction) {
         const voiceState = interaction.member.voice
         const voiceChannel = interaction.guild.channels.cache.find(channel => channel.id == voiceState.channelId)
+        let song = interaction.options.getString('song')
         let connection = getVoiceConnection(voiceChannel.guild.id)
         let alreadyInChannel = false
 
@@ -43,9 +44,6 @@ module.exports = {
                     return
                 } else if (currentChannel.members.size == 1) {
                     let queue = await getQueue(interaction.guild)
-                    if (typeof queue == 'string') {
-                        queue = JSON.parse(queue)
-                    }
 
                     let channelQueue = queue.channels.find((obj) => obj.channel == currentChannel.id)
                     if (typeof channelQueue != 'undefined' || channelQueue != null) {
@@ -61,26 +59,25 @@ module.exports = {
             }
         } else {
             let queue = await getQueue(interaction.guild)
-            if (typeof queue == 'string') {
-                queue = JSON.parse(queue)
-            }
 
             if (queue.channels.size > 0) {
-                let stringJSON = `{
-                    "channel": "${voiceChannel.id}", 
-                    "queue": [] 
-                }`
-                stringJSON = JSON.parse(stringJSON)
-                queue.channels.push(stringJSON)
+                let stringJSON = queueTemplate()
+                stringJSON.channel = currentChannel.id
+
+                let otherSongs = queue.channels.find((obj) => obj.channel == currentChannel.id).queue
+                if (typeof otherSongs != 'undefined' && otherSongs != null) {
+                    stringJSON.queue = queue.channels.find((obj) => obj.channel == currentChannel.id).queue
+                }
+
+                stringJSON.queue.push(song)
+
+                queue.channels[`${currentChannel.id}`] = stringJSON
+
                 fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
             }
         }
 
         let queue = await getQueue(interaction.guild)
-
-        if (typeof queue == 'string') {
-            queue = JSON.parse(queue)
-        }
 
         if (!alreadyInChannel) {
             connection = joinVoiceChannel({
@@ -90,22 +87,36 @@ module.exports = {
             })
         }
 
-        let song = interaction.options.getString('song')
-
         let channelQueue = queue.channels.find((obj) => obj.channel == voiceChannel.id)
 
         if (typeof channelQueue == 'undefined' || channelQueue == null) {
-            let stringJSON = `{
-                "channel": "${voiceChannel.id}", 
-                "queue": ["${song}"] 
-            }`
-            stringJSON = JSON.parse(stringJSON)
-            queue.channels.push(stringJSON)
+            let stringJSON = queueTemplate()
+            stringJSON.channel = currentChannel.id
+
+            stringJSON.queue.push(song)
+
+            queue.channels[`${currentChannel.id}`] = stringJSON
+
             fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
         } else {
             queue.channels.find((obj) => obj.channel == voiceChannel.id).queue.push(`${song}`)
             fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
         }
+
+        //Play video
+        if (connection === undefined) {
+            throw new Error(`Connection Lost. Guild:${interaction.guild.id}`)
+        }
+
+        let serverQueue = getQueue(connection.joinConfig.guildId).channels.find(channel => channel.id == connection.joinConfig.channelId)
+
+        let songsQueue = serverQueue.queue
+        if (songsQueue.length > 1) {
+            serverQueue.queue.shift()
+            fs.writeFileSync(`./queue/${connection.joinConfig.guildId}.json`, JSON.stringify(serverQueue))
+        }
+
+        let videoID = YTInput(songsQueue[0])
 
         await interaction.editReply({
             content: '👍'
