@@ -1,12 +1,12 @@
 const fs = require('fs')
 const ytsr = require('ytsr')
-const ytdl = require('ytdl-core')
-const { createAudioResource, StreamType, createAudioPlayer, NoSubscriberBehavior } = require('@discordjs/voice')
+const playdl = require('play-dl')
+const { createAudioResource, StreamType, createAudioPlayer, getVoiceConnection, AudioPlayerStatus, entersState, VoiceConnectionStatus } = require('@discordjs/voice')
 
 async function queueTemplate() {
     let template = fs.readFileSync('./queue/queueTemplate.json', { encoding: 'utf8', flag: 'r' })
     if (typeof template == 'string') {
-        JSON.parse(template)
+        template = JSON.parse(template)
     }
 
     return template
@@ -25,9 +25,9 @@ async function getQueue(server) {
         let queueFile = files.find((fileName) => fileName == `${serverID}.json`) //Check if queue already exists
         if (typeof queueFile != 'undefined') { //Return existing queue data
             serverQueue = fs.readFileSync(`./queue/${queueFile}`, { encoding: 'utf8', flag: 'r' })
-
+            
             if (typeof serverQueue == 'string') {
-                JSON.parse(serverQueue)
+                serverQueue = JSON.parse(serverQueue)
             }
             return serverQueue
         } else {
@@ -53,14 +53,17 @@ async function getQueue(server) {
         }
 
         if (typeof serverQueue == 'string') {
-            JSON.parse(serverQueue)
+            serverQueue = JSON.parse(serverQueue)
         }
         return serverQueue
     }
 }
 
 function validYTURL(str, returnArray=false) {
-    let pattern = new RegExp('^(?:(?:https?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com|youtu\.be)\/oembed\?url=)?(?:https?(?:%3A|:)\/\/)?(?:www\.)?(?:m\.)?(?:youtube(?:-nocookie)?\.com|youtu\.be)\/(?:attribution_link\?a=[[a-zA-Z\d-]*&u=(?:%2F|\/))?(watch|embed\/|playlist|(?:v|e)\/)?(?:\?|%3F|&)?(?:(?:(?:feature|app)=\w*&)?(?:v|list)(?:=|%3D))?((?:-|_|(?!list|feature|app)[a-zA-Z\d])*)(?:(?:(?:\?|&|#|%26|;)(?:si|feature|playnext_from|version|fs|format|videos|autohide|hl|rel|amp)(?:=|%3D)?[\w\-\.]*)*)?(?:(?:&|\?|#)(?:list=([\w\-]*)))?(?:(?:&|\?|#)t=((?:\d*[hms]?)*))?(?:(?:(?:&|\?|#)(?:index|shuffle)=\d*)*)?')
+    RegExp.quote = function(str) {
+        return str.replace(/([.?*+^$[\]\\(){}|-])/g, "\\$1");
+   };
+    let pattern = new RegExp(RegExp.quote('/^(?:(?:https?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com|youtu\.be)\/oembed\?url=)?(?:https?(?:%3A|:)\/\/)?(?:www\.)?(?:m\.)?(?:youtube(?:-nocookie)?\.com|youtu\.be)\/(?:attribution_link\?a=[[a-zA-Z\d-]*&u=(?:%2F|\/))?(watch|embed\/|playlist|(?:v|e)\/)?(?:\?|%3F|&)?(?:(?:(?:feature|app)\=\w*&)?(?:v|list)(?:\=|\%3D))?((?:-|_|(?!list|feature|app)[a-zA-Z\d])*)(?:(?:(?:\?|&|#|%26|;)(?:si|feature|playnext_from|version|fs|format|videos|autohide|hl|rel|amp)(?:=|%3D)?[\w\-\.]*)*)?(?:(?:&|\?|#)(?:list=([\w\-]*)))?(?:(?:&|\?|#)t=((?:\d*[hms]?)*))?(?:(?:(?:&|\?|#)(?:index|shuffle)=\d*)*)?/'))
     if (returnArray) {
         return pattern.exec(str)
     } else {
@@ -120,32 +123,45 @@ async function ApolloPlayer(guildAndChannel, action, arg, connection, jump='0s')
     let guild = guildAndChannel.guild
     let vcID = guildAndChannel.channelID
 
-    switch (arg) {
-        case 'play':
-            let channel = getQueue(guild).channels.find((obj) => obj.channel == vcID)
-            let player = channel.audioPlayer
+    console.log(action)
 
-            if (player !== null) {
+    switch (action) {
+        case 'play':
+            let queue = await getQueue(guild)
+            let channel = queue.channels.find((obj) => obj.channel == vcID)
+            let player = channel.audioPlayer
+            connection = getVoiceConnection(guild.id)
+
+            if (player == null) {
                 player = createAudioPlayer()
             }
 
-            let subscription = connection.receiver.subscriptions
-            if (subscription.length > 0) {
-                subscription = subscription[0]
-            } else if (subscription.length === 0) {
-                subscription = channel.subscribe(player)
+            let getSong = await playdl.stream(arg[0].toString())
+            let resource = createAudioResource(getSong.stream, {
+                inputType: getSong.type
+            })
+
+            try {
+                await entersState(connection, VoiceConnectionStatus.Ready, 5000)
+            } catch (error) {
+                console.log("Voice Connection not ready within 5s.", error)
+                return
             }
 
-            
-            let resource = createAudioResource(ytdl(`https://www.youtube.com/watch?v=${arg[0]}`, {
-                begin: jump
-            }), {
-                inputType: StreamType.Opus
-            })
+            let subscription = connection.receiver.subscriptions
+            if (subscription.size > 0) {
+                subscription = subscription[0]
+            } else if (subscription.size == 0 ||  subscription == 'undefined') {
+                subscription = connection.subscribe(player)
+            }
+
+            player.play(resource)
+
+            return player
     }
 }
 function searchPL(id) {
 
 }
 
-module.exports = { getQueue, YTInput, queueTemplate }
+module.exports = { getQueue, YTInput, queueTemplate, ApolloPlayer }

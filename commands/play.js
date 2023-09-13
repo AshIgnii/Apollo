@@ -1,8 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, SlashCommandStringOption } = require('discord.js')
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice')
-const { getQueue, YTInput, queueTemplate } = require('../util.js')
+const { getQueue, YTInput, queueTemplate, ApolloPlayer } = require('../util.js')
 const fs = require('fs')
-const ytdl = require('ytsr');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -59,14 +58,14 @@ module.exports = {
             }
         } else {
             let queue = await getQueue(interaction.guild)
-
+            
             if (queue.channels.size > 0) {
                 let stringJSON = queueTemplate()
                 stringJSON.channel = currentChannel.id
 
                 let otherSongs = queue.channels.find((obj) => obj.channel == currentChannel.id).queue
                 if (typeof otherSongs != 'undefined' && otherSongs != null) {
-                    stringJSON.queue = queue.channels.find((obj) => obj.channel == currentChannel.id).queue
+                    stringJSON.queue = otherSongs
                 }
 
                 stringJSON.queue.push(song)
@@ -88,35 +87,56 @@ module.exports = {
         }
 
         let channelQueue = queue.channels.find((obj) => obj.channel == voiceChannel.id)
+        
+        if (typeof currentChannel == 'undefined') {
+            currentChannel = voiceChannel
+        }
 
         if (typeof channelQueue == 'undefined' || channelQueue == null) {
-            let stringJSON = queueTemplate()
+            let stringJSON = await queueTemplate()
+
             stringJSON.channel = currentChannel.id
 
             stringJSON.queue.push(song)
 
-            queue.channels[`${currentChannel.id}`] = stringJSON
+            queue.channels.push(stringJSON)
 
-            fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
+            let writeJSON = JSON.stringify(queue)
+            fs.writeFileSync(`./queue/${interaction.guild.id}.json`, writeJSON)
+            channelQueue = stringJSON
         } else {
             queue.channels.find((obj) => obj.channel == voiceChannel.id).queue.push(`${song}`)
-            fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
+
+            let writeJSON = JSON.stringify(queue)
+            fs.writeFileSync(`./queue/${interaction.guild.id}.json`, writeJSON)
+            channelQueue = queue.channels.find((obj) => obj.channel == voiceChannel.id)
         }
 
         //Play video
-        if (connection === undefined) {
-            throw new Error(`Connection Lost. Guild:${interaction.guild.id}`)
+        if (typeof connection == 'undefined') {
+            throw new Error(`Connection Lost. Guild:${joinConfig.guildId}`)
         }
 
-        let serverQueue = getQueue(connection.joinConfig.guildId).channels.find(channel => channel.id == connection.joinConfig.channelId)
+        let serverQueue = await getQueue(interaction.client.guilds.cache.find((guild) => guild.id = connection.joinConfig.guildId))
+        serverQueueChannel = serverQueue.channels.find((obj) => obj.channel == connection.joinConfig.channelId)
 
-        let songsQueue = serverQueue.queue
+        let songsQueue = serverQueueChannel.queue
         if (songsQueue.length > 1) {
-            serverQueue.queue.shift()
-            fs.writeFileSync(`./queue/${connection.joinConfig.guildId}.json`, JSON.stringify(serverQueue))
+           //TODO
+           return
         }
 
         let videoID = YTInput(songsQueue[0])
+
+        let player = await ApolloPlayer({ channelID: connection.joinConfig.channelId, guild: interaction.client.guilds.cache.find((guild) => guild.id = connection.joinConfig.guildId) }, 'play', [songsQueue], connection)
+
+        player = null //DEBUG
+
+        queue = await getQueue(interaction.client.guilds.cache.find((guild) => guild.id = connection.joinConfig.guildId))
+        
+        queue.channels.find((obj) => obj.channel == connection.joinConfig.channelId).queue.shift()
+        queue.channels.find((obj) => obj.channel == connection.joinConfig.channelId).audioPlayer = player
+        fs.writeFileSync(`./queue/${interaction.guild.id}.json`, JSON.stringify(queue))
 
         await interaction.editReply({
             content: '👍'
