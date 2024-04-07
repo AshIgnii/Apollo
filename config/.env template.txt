@@ -1,2 +1,0 @@
-TOKEN="bot token goes here"
-CLIENT_ID="client id goes here"
