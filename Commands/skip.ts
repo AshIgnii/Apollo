@@ -1,7 +1,9 @@
 import { SlashCommandBuilder, Snowflake } from 'discord.js';
-import { stream } from 'play-dl';
+import { SoundCloudStream, YouTubeStream, stream } from 'play-dl';
 import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
+import { song } from '../Classes/song';
+import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
 
 const command = {
 	data: new SlashCommandBuilder()
@@ -127,13 +129,13 @@ const command = {
 			content: locales[interaction.locale] ?? `⏩ Skipping ${input} track${plural}...`,
 		});
 
-		let nextSong = serverQueue.getSong();
+		let nextSong: song = serverQueue.getSong();
 		if (nextSong === undefined) {
 			return;
 		}
 
 		const id = nextSong.id;
-		const audioStream = await stream(id);
+		const audioStream: YouTubeStream | SoundCloudStream = await stream(id);
 		const resource: AudioResource = createAudioResource(audioStream.stream, {
 			inputType: audioStream.type,
 		});
@@ -142,6 +144,9 @@ const command = {
 		if (serverQueue.getState('paused')) {
 			serverQueue.changeState('paused');
 		}
+
+		const currentSong: song = serverQueue.getSong();
+		refreshPlayingMSG(currentSong, serverQueue, interaction);
 
 		if (newPlayer) {
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {

@@ -1,10 +1,12 @@
 import { AudioPlayer } from '@discordjs/voice';
 import { song as songClass } from './song';
+import { Message } from 'discord.js';
 
 export class queue {
 	serverID: string;
 	channelID?: number;
 	timeout?: any;
+	private playerMSG?: Message;
 	private player?: AudioPlayer;
 	private playing: boolean;
 	private paused: boolean;
@@ -75,7 +77,15 @@ export class queue {
 		}
 	}
 
-	public getSongsArray(): songClass[] {
-		return this.songs;
+	public getMessage(): Message | undefined {
+		return this.playerMSG;
+	}
+
+	public setMessage(msg: Message | undefined): void {
+		this.playerMSG = msg;
+	}
+
+	public purgeQueue(): void {
+		this.songs = new Array<songClass>();
 	}
 }

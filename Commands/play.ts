@@ -1,8 +1,9 @@
-import { SlashCommandBuilder, EmbedBuilder, Snowflake } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, Snowflake, VoiceChannel } from 'discord.js';
 import { InfoData, SoundCloudStream, YouTubeStream, stream, video_basic_info } from 'play-dl';
 import { song } from '../Classes/song';
 import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
+import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
 
 const command = {
 	data: new SlashCommandBuilder()
@@ -37,6 +38,32 @@ const command = {
 				content: locales[interaction.locale] ?? 'You need to be in a voice channel!',
 			});
 			return;
+		}
+
+		let connection: VoiceConnection | undefined = getVoiceConnection(interaction.guildId);
+		if (connection !== undefined) {
+			const botVC: string | null = connection.joinConfig.channelId;
+			const serverVC: VoiceChannel = await interaction.guild.channels.fetch(botVC);
+
+			if (serverVC.members.size > 1 && botVC !== vc) {
+				const locales: any = {
+					'pt-BR': 'Eu já estou ativo em outro canal de voz!',
+				};
+
+				await interaction.editReply({
+					content: locales[interaction.locale] ?? 'I\'m already active in another voice channel!',
+				});
+				return;
+			} else if (serverVC.members.size <= 1 && botVC !== vc) {
+				if (serverQueue.getState('playing')) {
+					serverQueue.purgeQueue();
+					serverQueue.setMessage(undefined);
+					serverQueue.changeState('playing');
+				}
+
+				connection.disconnect();
+				connection.destroy();
+			}
 		}
 
 		const input: string = interaction.options.getString('song');
@@ -76,6 +103,7 @@ const command = {
 			if (info !== undefined) {
 				newSong.title = info.video_details.title;
 				newSong.durationSec = info.video_details.durationInSec;
+				newSong.thumbnailURL = info.video_details.thumbnails[0].url;
 			} else {
 				newSong.title = 'No title';
 				newSong.durationSec = 0;
@@ -83,27 +111,27 @@ const command = {
 
 			serverQueue.addSong(newSong);
 
+			const defaultEmbed = new EmbedBuilder()
+				.setAuthor({
+					name: 'Added to the queue!',
+					iconURL: interaction.client.user.avatarURL().toString(),
+				})
+				.setColor('Green')
+				.setDescription(newSong.title ?? 'No title')
+				.setTimestamp(interaction.createdTimestamp);
 			const locales: any = {
-				'en-US': new EmbedBuilder()
-					.setAuthor({
-						name: 'Added to the queue!',
-						iconURL: interaction.client.user.avatarURL().toString(),
-					})
-					.setColor('Red')
-					.setDescription(newSong.title ?? 'No title')
-					.setTimestamp(interaction.createdTimestamp),
 				'pt-BR': new EmbedBuilder()
 					.setAuthor({
 						name: 'Adicionado a fila!',
 						iconURL: interaction.client.user.avatarURL().toString(),
 					})
-					.setColor('Red')
+					.setColor('Green')
 					.setDescription(newSong.title ?? 'No title')
 					.setTimestamp(interaction.createdTimestamp),
 			};
 
 			await interaction.editReply({
-				embeds: [locales[interaction.locale]],
+				embeds: [locales[interaction.locale] ?? defaultEmbed],
 			});
 		}
 
@@ -115,7 +143,7 @@ const command = {
 				clearTimeout(serverQueue.timeout);
 			}
 
-			let connection: VoiceConnection | undefined = getVoiceConnection(interaction.guildId);
+			connection = getVoiceConnection(interaction.guildId);
 			if (connection === undefined) {
 				connection = joinVoiceChannel({
 					channelId: vc,
@@ -140,6 +168,10 @@ const command = {
 
 			player.play(resource);
 
+			// playing msg
+			const currentSong: song = serverQueue.getSong();
+			refreshPlayingMSG(currentSong, serverQueue, interaction);
+
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
 				if (oldState.status == AudioPlayerStatus.Playing && newState.status == AudioPlayerStatus.Idle) {
 					if (!serverQueue.getState('paused')) {
@@ -156,6 +188,8 @@ const command = {
 							if (player !== null && player !== undefined) {
 								player.play(newResource);
 							}
+
+							refreshPlayingMSG(nextSong, serverQueue, interaction);
 						} else {
 							serverQueue.changeState('playing');
 
@@ -176,8 +210,10 @@ const command = {
 										connection.disconnect();
 										connection.destroy();
 									}
+
+									serverQueue.setMessage(undefined);
 								}
-							}, 10000);
+							}, 60000);
 						}
 					}
 				}
