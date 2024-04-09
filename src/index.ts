@@ -12,7 +12,7 @@ if (!clientToken) {
 }
 
 
-const manager: ShardingManager = new ShardingManager('./src/main.ts', { token: clientToken, execArgv: ['-r', 'ts-node/register'] });
+const manager: ShardingManager = new ShardingManager('./src/main.ts', {totalShards: "auto", token: clientToken, execArgv: ['-r', 'ts-node/register'] });
 
 manager.on('shardCreate', (shard: Shard) => console.log(`Launched ${chalk.greenBright('Shard')}${chalk.rgb(random255(), random255(), random255()).bold(`#${shard.id}`)}`));
 manager.spawn();
