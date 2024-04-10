@@ -4,6 +4,8 @@ import { song } from '../Classes/song';
 import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
 import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
+import ytpl, { result, validateID } from '@distube/ytpl';
+import { playlist } from '../Classes/playlist';
 
 const command = {
 	data: new SlashCommandBuilder()
@@ -72,13 +74,13 @@ const command = {
 
 		let type: string | undefined;
 		let id: string | undefined;
-		// let playlistID: string | undefined;
+		let playlistID: string | undefined;
 		// let seekTime: string | undefined;
 
 		if (inputExec !== null && inputExec.length > 0) {
 			type = inputExec[1];
 			id = inputExec[2];
-			// playlistID = inputExec[3];
+			playlistID = inputExec[3];
 			// seekTime = inputExec[4];
 		} else {
 			const locales: any = {
@@ -95,7 +97,8 @@ const command = {
 			throw new Error('Queue is undefined');
 		}
 
-		if (type === 'watch' || type === 'embed' || type === 'v' || type === 'e') {
+		let videoSuccess = false
+		if ((type === 'watch' || type === 'embed' || type === 'v' || type === 'e') && playlistID === undefined) {
 			const newSong: song = new song(id, interaction.member.id);
 
 			const info: InfoData = await video_basic_info(newSong.id);
@@ -110,6 +113,7 @@ const command = {
 			}
 
 			serverQueue.addSong(newSong);
+			videoSuccess = true;
 
 			const defaultEmbed = new EmbedBuilder()
 				.setAuthor({
@@ -133,6 +137,41 @@ const command = {
 			await interaction.editReply({
 				embeds: [locales[interaction.locale] ?? defaultEmbed],
 			});
+		}
+
+		if (type === 'playlist' || playlistID !== undefined) {
+			let pID: string = '0';
+			if (type === 'playlist') {
+				pID = id;
+			} else if (playlistID !== undefined) {
+				pID = playlistID
+			}
+
+			if (!validateID(pID)) {
+				const locales: any = {
+					'pt-BR': 'Playlist inválida',
+				}
+
+				if (videoSuccess) {
+					await interaction.channel.send({
+						content: locales[interaction.locale] ?? 'Invalid playlist ID',
+					});
+				} else {
+					await interaction.editReply({
+						content: locales[interaction.locale] ?? 'Invalid playlist ID',
+					});
+				}
+				return;
+			} else {
+				const newPlaylist: playlist = new playlist(await ytpl(id), interaction.member.id);
+				const songs: song[] = newPlaylist.getSongs();
+
+				if (songs.length > 0) {
+					serverQueue.addSong(songs)
+				}
+
+				console.log(serverQueue.getAllSongs())
+			}
 		}
 
 
@@ -161,6 +200,7 @@ const command = {
 
 			const subscription: PlayerSubscription | undefined = connection.subscribe(player);
 
+			id = serverQueue.getSong().id;
 			const audioStream: YouTubeStream | SoundCloudStream = await stream(id);
 			const resource: AudioResource = createAudioResource(audioStream.stream, {
 				inputType: audioStream.type,

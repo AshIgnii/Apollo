@@ -11,6 +11,7 @@
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.16.1",
+    "@distube/ytpl": "^1.2.1",
     "chalk": "^4.1.2",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
