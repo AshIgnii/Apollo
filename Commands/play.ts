@@ -174,6 +174,7 @@ const command = {
 			}
 		}
 
+		//not working?
 
 		if (!serverQueue.getState('playing')) {
 			serverQueue.changeState('playing');
