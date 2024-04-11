@@ -2,7 +2,6 @@ import { result } from "@distube/ytpl";
 import { song } from "./song";
 import { readFileSync } from 'fs';
 
-
 export class playlist {
     id: string;
     title: string;

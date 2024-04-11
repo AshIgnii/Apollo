@@ -1,12 +1,12 @@
 import { SlashCommandBuilder, EmbedBuilder, Snowflake, VoiceChannel } from 'discord.js';
 import { InfoData, SoundCloudStream, YouTubeStream, stream, video_basic_info } from 'play-dl';
+import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
+import ytpl, { result, validateID } from '@distube/ytpl';
 import { song } from '../Classes/song';
 import { queue } from '../Classes/queue';
-import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
-import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
-import ytpl, { result, validateID } from '@distube/ytpl';
 import { playlist } from '../Classes/playlist';
 import { tryNextSong } from '../Functions/tryNextSong';
+import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
 
 const command = {
 	data: new SlashCommandBuilder()
