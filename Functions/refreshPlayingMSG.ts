@@ -3,8 +3,9 @@ import { song } from '../Classes/song';
 import { queue } from '../Classes/queue';
 import { readFileSync } from 'fs';
 
-export async function refreshPlayingMSG(currentSong: song | undefined, sQueue: queue, interaction: any): Promise<void> {
+export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promise<void> {
 	let playingMSG = sQueue.getMessage();
+	let currentSong = sQueue.getSong();
 
 	let songTitle: string | undefined;
 	let thumbnail: string | null = null;

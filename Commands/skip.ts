@@ -146,7 +146,7 @@ const command = {
 		}
 
 		const currentSong: song = serverQueue.getSong();
-		refreshPlayingMSG(currentSong, serverQueue, interaction);
+		refreshPlayingMSG(serverQueue, interaction);
 
 		if (newPlayer) {
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {

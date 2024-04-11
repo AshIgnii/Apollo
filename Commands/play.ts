@@ -6,6 +6,7 @@ import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubs
 import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
 import ytpl, { result, validateID } from '@distube/ytpl';
 import { playlist } from '../Classes/playlist';
+import { tryNextSong } from '../Functions/tryNextSong';
 
 const command = {
 	data: new SlashCommandBuilder()
@@ -163,18 +164,41 @@ const command = {
 				}
 				return;
 			} else {
-				const newPlaylist: playlist = new playlist(await ytpl(id), interaction.member.id);
+				const newPlaylist: playlist = new playlist(await ytpl(pID), interaction.member.id);
 				const songs: song[] = newPlaylist.getSongs();
 
 				if (songs.length > 0) {
 					serverQueue.addSong(songs)
-				}
+					let pTitle = newPlaylist.title
+					let thumb = newPlaylist.thumbnailURL
 
-				console.log(serverQueue.getAllSongs())
+					const defaultEmbed = new EmbedBuilder()
+						.setAuthor({
+							name: 'Playlist added to the queue!',
+							iconURL: interaction.client.user.avatarURL().toString(),
+						})
+						.setColor('Yellow')
+						.setDescription(pTitle ?? 'No title')
+						.setThumbnail(thumb)
+						.setTimestamp(interaction.createdTimestamp);
+					const locales: any = {
+						'pt-BR': new EmbedBuilder()
+							.setAuthor({
+								name: 'Playlist adicionado a fila!',
+								iconURL: interaction.client.user.avatarURL().toString(),
+							})
+							.setColor('Yellow')
+							.setDescription(pTitle ?? 'No title')
+							.setThumbnail(thumb)
+							.setTimestamp(interaction.createdTimestamp),
+					};
+
+					await interaction.editReply({
+						embeds: [locales[interaction.locale] ?? defaultEmbed],
+					});
+				}
 			}
 		}
-
-		//not working?
 
 		if (!serverQueue.getState('playing')) {
 			serverQueue.changeState('playing');
@@ -211,26 +235,25 @@ const command = {
 
 			// playing msg
 			const currentSong: song = serverQueue.getSong();
-			refreshPlayingMSG(currentSong, serverQueue, interaction);
+			refreshPlayingMSG(serverQueue, interaction);
 
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
 				if (oldState.status == AudioPlayerStatus.Playing && newState.status == AudioPlayerStatus.Idle) {
 					if (!serverQueue.getState('paused')) {
-						serverQueue.shiftQueue();
-						const nextSong = serverQueue.getSong();
+						const newaudioStream: YouTubeStream | SoundCloudStream | undefined = await tryNextSong(serverQueue, interaction)
 
-						if (nextSong !== undefined) {
-							const newaudioStream = await stream(nextSong.id);
+						if (newaudioStream !== undefined) {
 							const newResource: AudioResource = createAudioResource(newaudioStream.stream, {
 								inputType: newaudioStream.type,
 							});
 
 							player = serverQueue.getPlayer();
-							if (player !== null && player !== undefined) {
+							if (player !== undefined && player !== null) {
 								player.play(newResource);
 							}
 
-							refreshPlayingMSG(nextSong, serverQueue, interaction);
+							const nextSong = serverQueue.getSong();
+							refreshPlayingMSG(serverQueue, interaction);
 						} else {
 							serverQueue.changeState('playing');
 

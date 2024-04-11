@@ -5,11 +5,13 @@ import { readFileSync } from 'fs';
 
 export class playlist {
     id: string;
+    title: string;
     thumbnailURL: string;
     private songs: song[];
 
     constructor(playlist: result, userID: number) {
         this.id = playlist.id;
+        this.title = playlist.title;
         this.songs = new Array<song>();
 
         if (playlist.items.length > 0) {
