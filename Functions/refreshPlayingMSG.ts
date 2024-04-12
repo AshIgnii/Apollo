@@ -1,9 +1,8 @@
 import { EmbedBuilder, Message } from 'discord.js';
 import { queue } from '../Classes/queue';
-import { readFileSync } from 'fs';
 import { track } from '../Classes/track';
 
-export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promise<void> {
+export async function refreshPlayingMSG(sQueue: queue, interaction: any, assets: any): Promise<void> {
 	let playingMSG: Message | undefined = sQueue.getMessage();
 	let currentTrack: track = sQueue.getTrack();
 
@@ -16,17 +15,14 @@ export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promis
 		}
 	}
 	if (thumbnail === null) {
-		const assetFile = readFileSync('./Config/assets.json');
-		const jsonData = JSON.parse(assetFile.toString());
-
-		thumbnail = jsonData['no-thumbnail'];
+		thumbnail = assets['no-thumbnail'];
 	}
 
 	if (playingMSG === undefined) {
 		const defaultEmbed = new EmbedBuilder()
 			.setAuthor({
 				name: 'Playing 💿',
-				iconURL: interaction.client.user.avatarURL().toString(),
+				iconURL: assets['play'],
 			})
 			.setColor('Blue')
 			.setThumbnail(thumbnail)
@@ -36,7 +32,7 @@ export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promis
 			'pt-BR': new EmbedBuilder()
 				.setAuthor({
 					name: 'Tocando 💿',
-					iconURL: interaction.client.user.avatarURL().toString(),
+					iconURL: assets['play'],
 				})
 				.setThumbnail(thumbnail)
 				.setColor('Blue')
@@ -57,7 +53,7 @@ export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promis
 		const defaultEmbed = new EmbedBuilder()
 			.setAuthor({
 				name: 'Playing 💿',
-				iconURL: interaction.client.user.avatarURL().toString(),
+				iconURL: assets['play'],
 			})
 			.setThumbnail(thumbnail)
 			.setColor('Blue')
@@ -67,7 +63,7 @@ export async function refreshPlayingMSG(sQueue: queue, interaction: any): Promis
 			'pt-BR': new EmbedBuilder()
 				.setAuthor({
 					name: 'Tocando 💿',
-					iconURL: interaction.client.user.avatarURL().toString(),
+					iconURL: assets['play'],
 				})
 				.setThumbnail(thumbnail)
 				.setColor('Blue')

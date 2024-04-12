@@ -1,3 +1,5 @@
 {
-    "no-thumbnail": "image url"
+    "no-thumbnail": "image url",
+    "add-to-queue": "image url",
+    "play": "image url"
 }

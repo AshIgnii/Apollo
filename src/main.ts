@@ -18,6 +18,7 @@ const client: Client = new Client({
 	],
 });
 
+// Command handler
 const commands: Collection<string, any> = new Collection();
 const commandFiles: string[] = fs
 	.readdirSync('./Commands')
@@ -29,6 +30,11 @@ for (const file of commandFiles) {
 		commands.set(command.data.name, command);
 	});
 }
+
+// Assets Loader
+const assetFile = fs.readFileSync('./Config/assets.json');
+const assets = JSON.parse(assetFile.toString());
+
 
 const serverQueueCollection: Collection<string, queue> = new Collection();
 
@@ -61,7 +67,7 @@ client.on('interactionCreate', async (interaction) => {
 			}
 		}
 
-		await command.execute(interaction, serverQueue);
+		await command.execute(interaction, serverQueue, assets);
 	} catch (err: any) {
 		logError(err, interaction.commandName);
 		interaction.editReply({

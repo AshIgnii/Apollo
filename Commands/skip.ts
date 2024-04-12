@@ -29,7 +29,7 @@ const command = {
 				})
 				.setRequired(false),
 		),
-	async execute(interaction: any, serverQueue: queue) {
+	async execute(interaction: any, serverQueue: queue, assets: any) {
 		const vc: Snowflake | null = interaction.member.voice.channelId;
 		if (vc === undefined || vc === null) {
 			const locales: any = {
@@ -150,7 +150,7 @@ const command = {
 				serverQueue.changeState('paused');
 			}
 
-			refreshPlayingMSG(serverQueue, interaction);
+			refreshPlayingMSG(serverQueue, interaction, assets);
 		} else {
 			leaveIfInactive(interaction, serverQueue, subscription, connection);
 		}

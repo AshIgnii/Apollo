@@ -33,7 +33,7 @@ const command = {
 				})
 				.setRequired(true),
 		),
-	async execute(interaction: any, serverQueue: queue) {
+	async execute(interaction: any, serverQueue: queue, assets: any) {
 		const vc: Snowflake | null = interaction.member.voice.channelId;
 		if (vc === null) {
 			const locales: any = {
@@ -122,7 +122,7 @@ const command = {
 			const defaultEmbed = new EmbedBuilder()
 				.setAuthor({
 					name: 'Added to the queue!',
-					iconURL: interaction.client.user.avatarURL().toString(),
+					iconURL: assets['add-to-queue'],
 				})
 				.setColor('Green')
 				.setDescription(newTrack.title ?? 'No title')
@@ -131,7 +131,7 @@ const command = {
 				'pt-BR': new EmbedBuilder()
 					.setAuthor({
 						name: 'Adicionado a fila!',
-						iconURL: interaction.client.user.avatarURL().toString(),
+						iconURL: assets['add-to-queue'],
 					})
 					.setColor('Green')
 					.setDescription(newTrack.title ?? 'No title')
@@ -178,7 +178,7 @@ const command = {
 					const defaultEmbed = new EmbedBuilder()
 						.setAuthor({
 							name: 'Playlist added to the queue!',
-							iconURL: interaction.client.user.avatarURL().toString(),
+							iconURL: assets['add-to-queue'],
 						})
 						.setColor('Yellow')
 						.setDescription(pTitle ?? 'No title')
@@ -188,7 +188,7 @@ const command = {
 						'pt-BR': new EmbedBuilder()
 							.setAuthor({
 								name: 'Playlist adicionada à fila!',
-								iconURL: interaction.client.user.avatarURL().toString(),
+								iconURL: assets['add-to-queue'],
 							})
 							.setColor('Yellow')
 							.setDescription(pTitle ?? 'No title')
@@ -238,7 +238,7 @@ const command = {
 
 				player.play(resource);
 
-				refreshPlayingMSG(serverQueue, interaction);
+				refreshPlayingMSG(serverQueue, interaction, assets);
 			} else {
 				leaveIfInactive(interaction, serverQueue, subscription, connection);
 			}
@@ -260,7 +260,7 @@ const command = {
 							}
 
 							const nextTrack = serverQueue.getTrack();
-							refreshPlayingMSG(serverQueue, interaction);
+							refreshPlayingMSG(serverQueue, interaction, assets);
 						} else {
 							leaveIfInactive(interaction, serverQueue, subscription, connection);
 						}
