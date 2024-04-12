@@ -1,52 +1,52 @@
 import { AudioPlayer } from '@discordjs/voice';
-import { song as songClass } from './song';
+import { track } from './track';
 import { Message } from 'discord.js';
 
 export class queue {
 	serverID: string;
 	channelID?: number;
-	timeout?: any;
+	private timeout?: any;
 	private playerMSG?: Message;
 	private player?: AudioPlayer;
 	private playing: boolean;
 	private paused: boolean;
-	private songs: songClass[];
+	private tracks: track[];
 
 	constructor(server: string, voiceChannelID?: number) {
 		this.serverID = server;
 		this.playing = false;
 		this.paused = false;
-		this.songs = new Array<songClass>();
+		this.tracks = new Array<track>();
 
 		if (voiceChannelID !== undefined) {
 			this.channelID = voiceChannelID;
 		}
 	}
 
-	public addSong(song: songClass | songClass[]): void {
-		if (Array.isArray(song)) {
-			for (let i: number = 0; i < song.length; i++) {
-				this.songs.push(song[i]);
+	public addTrack(newTrack: track | track[]): void {
+		if (Array.isArray(newTrack)) {
+			for (let i: number = 0; i < newTrack.length; i++) {
+				this.tracks.push(newTrack[i]);
 			}
 		} else {
-			this.songs.push(song);
+			this.tracks.push(newTrack);
 		}
 	}
 
-	public getSong(index?: number): songClass {
+	public getTrack(index?: number): track {
 		if (index !== undefined) {
-			return this.songs[index];
+			return this.tracks[index];
 		} else {
-			return this.songs[0];
+			return this.tracks[0];
 		}
 	}
 
-	public getAllSongs(): songClass[] {
-		return this.songs;
+	public getAllTracks(): track[] {
+		return this.tracks;
 	}
 
 	public shiftQueue(): void {
-		this.songs.shift();
+		this.tracks.shift();
 	}
 
 	public setPlayer(newPlayer: AudioPlayer): void {
@@ -86,6 +86,13 @@ export class queue {
 	}
 
 	public purgeQueue(): void {
-		this.songs = new Array<songClass>();
+		this.tracks = new Array<track>();
+	}
+
+	public setLeaveTimeout(t: any): void {
+		this.timeout = t;
+	}
+	public getLeaveTimeout(): any {
+		return this.timeout
 	}
 }

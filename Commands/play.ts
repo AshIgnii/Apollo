@@ -1,26 +1,32 @@
-import { SlashCommandBuilder, EmbedBuilder, Snowflake, VoiceChannel } from 'discord.js';
-import { InfoData, SoundCloudStream, YouTubeStream, stream, video_basic_info } from 'play-dl';
-import { song } from '../Classes/song';
-import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
+import { SlashCommandBuilder, EmbedBuilder, Snowflake, VoiceChannel } from 'discord.js';
+import { InfoData, SoundCloudStream, YouTubeStream, video_basic_info } from 'play-dl';
+import ytpl, { validateID } from '@distube/ytpl';
+import { track } from '../Classes/track';
+import { queue } from '../Classes/queue';
+import { playlist } from '../Classes/playlist';
+import { getNextAvailableStream } from '../Functions/getNextAvailableStream';
+import { leaveIfInactive } from '../Functions/leaveIfInactive';
 import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
+
+
 
 const command = {
 	data: new SlashCommandBuilder()
 		.setName('play')
-		.setDescription('Plays music in your voice channel')
+		.setDescription('Plays a music track in your voice channel')
 		.setNameLocalizations({
 			'pt-BR': 'tocar',
 		})
 		.setDescriptionLocalizations({
-			'pt-BR': 'Toca uma musica em seu canal de voz',
+			'pt-BR': 'Toca uma música em seu canal de voz',
 		})
 		.addStringOption(option =>
 			option
 				.setName('song')
 				.setDescription('Youtube URL or search query')
 				.setNameLocalizations({
-					'pt-BR': 'musica',
+					'pt-BR': 'música',
 				})
 				.setDescriptionLocalizations({
 					'pt-BR': 'Link do Youtube ou termo de busca',
@@ -72,13 +78,13 @@ const command = {
 
 		let type: string | undefined;
 		let id: string | undefined;
-		// let playlistID: string | undefined;
+		let playlistID: string | undefined;
 		// let seekTime: string | undefined;
 
 		if (inputExec !== null && inputExec.length > 0) {
 			type = inputExec[1];
 			id = inputExec[2];
-			// playlistID = inputExec[3];
+			playlistID = inputExec[3];
 			// seekTime = inputExec[4];
 		} else {
 			const locales: any = {
@@ -95,21 +101,23 @@ const command = {
 			throw new Error('Queue is undefined');
 		}
 
-		if (type === 'watch' || type === 'embed' || type === 'v' || type === 'e') {
-			const newSong: song = new song(id, interaction.member.id);
+		let videoSuccess = false
+		if ((type === 'watch' || type === 'embed' || type === 'v' || type === 'e') && playlistID === undefined) {
+			const newTrack: track = new track(id, interaction.member.id);
 
-			const info: InfoData = await video_basic_info(newSong.id);
+			const info: InfoData = await video_basic_info(newTrack.id);
 
 			if (info !== undefined) {
-				newSong.title = info.video_details.title;
-				newSong.durationSec = info.video_details.durationInSec;
-				newSong.thumbnailURL = info.video_details.thumbnails[0].url;
+				newTrack.title = info.video_details.title;
+				newTrack.durationSec = info.video_details.durationInSec;
+				newTrack.thumbnailURL = info.video_details.thumbnails[0].url;
 			} else {
-				newSong.title = 'No title';
-				newSong.durationSec = 0;
+				newTrack.title = 'No title';
+				newTrack.durationSec = 0;
 			}
 
-			serverQueue.addSong(newSong);
+			serverQueue.addTrack(newTrack);
+			videoSuccess = true;
 
 			const defaultEmbed = new EmbedBuilder()
 				.setAuthor({
@@ -117,7 +125,7 @@ const command = {
 					iconURL: interaction.client.user.avatarURL().toString(),
 				})
 				.setColor('Green')
-				.setDescription(newSong.title ?? 'No title')
+				.setDescription(newTrack.title ?? 'No title')
 				.setTimestamp(interaction.createdTimestamp);
 			const locales: any = {
 				'pt-BR': new EmbedBuilder()
@@ -126,7 +134,7 @@ const command = {
 						iconURL: interaction.client.user.avatarURL().toString(),
 					})
 					.setColor('Green')
-					.setDescription(newSong.title ?? 'No title')
+					.setDescription(newTrack.title ?? 'No title')
 					.setTimestamp(interaction.createdTimestamp),
 			};
 
@@ -135,12 +143,72 @@ const command = {
 			});
 		}
 
+		if (type === 'playlist' || playlistID !== undefined) {
+			let pID: string = '0';
+			if (type === 'playlist') {
+				pID = id;
+			} else if (playlistID !== undefined) {
+				pID = playlistID
+			}
+
+			if (!validateID(pID)) {
+				const locales: any = {
+					'pt-BR': 'Playlist inválida',
+				}
+
+				if (videoSuccess) {
+					await interaction.channel.send({
+						content: locales[interaction.locale] ?? 'Invalid playlist ID',
+					});
+				} else {
+					await interaction.editReply({
+						content: locales[interaction.locale] ?? 'Invalid playlist ID',
+					});
+				}
+				return;
+			} else {
+				const newPlaylist: playlist = new playlist(await ytpl(pID), interaction.member.id);
+				const tracks: track[] = newPlaylist.getTracks();
+
+				if (tracks.length > 0) {
+					serverQueue.addTrack(tracks)
+					let pTitle = newPlaylist.title
+					let thumb = newPlaylist.thumbnailURL
+
+					const defaultEmbed = new EmbedBuilder()
+						.setAuthor({
+							name: 'Playlist added to the queue!',
+							iconURL: interaction.client.user.avatarURL().toString(),
+						})
+						.setColor('Yellow')
+						.setDescription(pTitle ?? 'No title')
+						.setThumbnail(thumb)
+						.setTimestamp(interaction.createdTimestamp);
+					const locales: any = {
+						'pt-BR': new EmbedBuilder()
+							.setAuthor({
+								name: 'Playlist adicionada à fila!',
+								iconURL: interaction.client.user.avatarURL().toString(),
+							})
+							.setColor('Yellow')
+							.setDescription(pTitle ?? 'No title')
+							.setThumbnail(thumb)
+							.setTimestamp(interaction.createdTimestamp),
+					};
+
+					await interaction.editReply({
+						embeds: [locales[interaction.locale] ?? defaultEmbed],
+					});
+				}
+			}
+		}
 
 		if (!serverQueue.getState('playing')) {
 			serverQueue.changeState('playing');
 
-			if (serverQueue.timeout !== null || serverQueue.timeout !== undefined) {
-				clearTimeout(serverQueue.timeout);
+			let queueTimeout = serverQueue.getLeaveTimeout();
+			if (queueTimeout !== null || queueTimeout !== undefined) {
+				clearTimeout(queueTimeout);
 			}
 
 			connection = getVoiceConnection(interaction.guildId);
@@ -161,59 +229,40 @@ const command = {
 
 			const subscription: PlayerSubscription | undefined = connection.subscribe(player);
 
-			const audioStream: YouTubeStream | SoundCloudStream = await stream(id);
-			const resource: AudioResource = createAudioResource(audioStream.stream, {
-				inputType: audioStream.type,
-			});
+			const audioStream: YouTubeStream | SoundCloudStream | undefined = await getNextAvailableStream(serverQueue, interaction);
 
-			player.play(resource);
+			if (audioStream !== undefined) {
+				const resource: AudioResource = createAudioResource(audioStream.stream, {
+					inputType: audioStream.type,
+				});
 
-			// playing msg
-			const currentSong: song = serverQueue.getSong();
-			refreshPlayingMSG(currentSong, serverQueue, interaction);
+				player.play(resource);
+
+				refreshPlayingMSG(serverQueue, interaction);
+			} else {
+				leaveIfInactive(interaction, serverQueue, subscription, connection);
+			}
 
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
 				if (oldState.status == AudioPlayerStatus.Playing && newState.status == AudioPlayerStatus.Idle) {
 					if (!serverQueue.getState('paused')) {
 						serverQueue.shiftQueue();
-						const nextSong = serverQueue.getSong();
+						const newaudioStream: YouTubeStream | SoundCloudStream | undefined = await getNextAvailableStream(serverQueue, interaction)
 
-						if (nextSong !== undefined) {
-							const newaudioStream = await stream(nextSong.id);
+						if (newaudioStream !== undefined) {
 							const newResource: AudioResource = createAudioResource(newaudioStream.stream, {
 								inputType: newaudioStream.type,
 							});
 
 							player = serverQueue.getPlayer();
-							if (player !== null && player !== undefined) {
+							if (player !== undefined && player !== null) {
 								player.play(newResource);
 							}
 
-							refreshPlayingMSG(nextSong, serverQueue, interaction);
+							const nextTrack = serverQueue.getTrack();
+							refreshPlayingMSG(serverQueue, interaction);
 						} else {
-							serverQueue.changeState('playing');
-
-							if (subscription !== undefined) {
-								subscription.unsubscribe();
-
-								player = serverQueue.getPlayer();
-								if (player !== null && player !== undefined) {
-									player.stop();
-									player = null;
-								}
-							}
-
-							serverQueue.timeout = setTimeout(() => {
-								if (!serverQueue.getState('playing')) {
-									connection = getVoiceConnection(interaction.guildId);
-									if (connection !== undefined) {
-										connection.disconnect();
-										connection.destroy();
-									}
-
-									serverQueue.setMessage(undefined);
-								}
-							}, 60000);
+							leaveIfInactive(interaction, serverQueue, subscription, connection);
 						}
 					}
 				}

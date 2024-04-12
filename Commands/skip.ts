@@ -2,8 +2,10 @@ import { SlashCommandBuilder, Snowflake } from 'discord.js';
 import { SoundCloudStream, YouTubeStream, stream } from 'play-dl';
 import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
-import { song } from '../Classes/song';
+import { track } from '../Classes/track';
 import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
+import { getNextAvailableStream } from '../Functions/getNextAvailableStream';
+import { leaveIfInactive } from '../Functions/leaveIfInactive';
 
 const command = {
 	data: new SlashCommandBuilder()
@@ -78,8 +80,9 @@ const command = {
 			serverQueue.changeState('playing');
 		}
 
-		if (serverQueue.timeout !== null || serverQueue.timeout !== undefined) {
-			clearTimeout(serverQueue.timeout);
+		let queueTimeout = serverQueue.getLeaveTimeout();
+		if (queueTimeout !== null || queueTimeout !== undefined) {
+			clearTimeout(queueTimeout);
 		}
 
 		connection = getVoiceConnection(interaction.guildId);
@@ -107,7 +110,7 @@ const command = {
 			serverQueue.setPlayer(player);
 			subscription = connection.subscribe(player);
 		} else {
-			if (serverQueue.getSong() !== undefined) {
+			if (serverQueue.getTrack() !== undefined) {
 				if (!serverQueue.getState('paused')) {
 					serverQueue.changeState('paused');
 				}
@@ -129,34 +132,38 @@ const command = {
 			content: locales[interaction.locale] ?? `⏩ Skipping ${input} track${plural}...`,
 		});
 
-		let nextSong: song = serverQueue.getSong();
-		if (nextSong === undefined) {
+		let nextTrack: track = serverQueue.getTrack();
+		if (nextTrack === undefined) {
 			return;
 		}
 
-		const id = nextSong.id;
-		const audioStream: YouTubeStream | SoundCloudStream = await stream(id);
-		const resource: AudioResource = createAudioResource(audioStream.stream, {
-			inputType: audioStream.type,
-		});
+		const id = nextTrack.id;
+		const audioStream: YouTubeStream | SoundCloudStream | undefined = await getNextAvailableStream(serverQueue, interaction);
+		if (audioStream != undefined) {
+			const resource: AudioResource = createAudioResource(audioStream.stream, {
+				inputType: audioStream.type,
+			});
 
-		player.play(resource);
-		if (serverQueue.getState('paused')) {
-			serverQueue.changeState('paused');
+			player.play(resource);
+
+			if (serverQueue.getState('paused')) {
+				serverQueue.changeState('paused');
+			}
+
+			refreshPlayingMSG(serverQueue, interaction);
+		} else {
+			leaveIfInactive(interaction, serverQueue, subscription, connection);
 		}
-
-		const currentSong: song = serverQueue.getSong();
-		refreshPlayingMSG(currentSong, serverQueue, interaction);
 
 		if (newPlayer) {
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
 				if (oldState.status == AudioPlayerStatus.Playing && newState.status == AudioPlayerStatus.Idle) {
 					if (!serverQueue.getState('paused')) {
 						serverQueue.shiftQueue();
-						nextSong = serverQueue.getSong();
+						nextTrack = serverQueue.getTrack();
 
-						if (nextSong !== undefined) {
-							const newaudioStream = await stream(nextSong.id);
+						if (nextTrack !== undefined) {
+							const newaudioStream = await stream(nextTrack.id);
 							const newResource: AudioResource = createAudioResource(newaudioStream.stream, {
 								inputType: newaudioStream.type,
 							});
@@ -175,7 +182,7 @@ const command = {
 								}
 							}
 
-							serverQueue.timeout = setTimeout(() => {
+							serverQueue.setLeaveTimeout(setTimeout(() => {
 								if (!serverQueue.getState('playing')) {
 									connection = getVoiceConnection(interaction.guildId);
 									if (connection !== undefined) {
@@ -183,7 +190,7 @@ const command = {
 										connection.destroy();
 									}
 								}
-							}, 10000);
+							}, 10000));
 						}
 					}
 				}
