@@ -1,5 +1,5 @@
 import { result } from "@distube/ytpl";
-import { song } from "./song";
+import { track } from "./track";
 import { readFileSync } from 'fs';
 
 
@@ -7,12 +7,12 @@ export class playlist {
     id: string;
     title: string;
     thumbnailURL: string;
-    private songs: song[];
+    private tracks: track[];
 
     constructor(playlist: result, userID: number) {
         this.id = playlist.id;
         this.title = playlist.title;
-        this.songs = new Array<song>();
+        this.tracks = new Array<track>();
 
         if (playlist.items.length > 0) {
             this.thumbnailURL = playlist.items[0].thumbnail;
@@ -22,12 +22,12 @@ export class playlist {
                 const item = items[i]
                 const id = item.id;
 
-                const newSong = new song(id, userID);
-                newSong.thumbnailURL = item.thumbnail;
-                newSong.title = item.title; 
-                newSong.durationSec = parseInt(item.duration ?? '0')
+                const newTrack = new track(id, userID);
+                newTrack.thumbnailURL = item.thumbnail;
+                newTrack.title = item.title; 
+                newTrack.durationSec = parseInt(item.duration ?? '0')
 
-                this.songs.push(newSong);
+                this.tracks.push(newTrack);
             }
         } else {
             const assetFile = readFileSync('./Config/assets.json');
@@ -37,7 +37,7 @@ export class playlist {
         }
     }
 
-    public getSongs(): song[] {
-        return this.songs;
+    public getTracks(): track[] {
+        return this.tracks;
     }
 }

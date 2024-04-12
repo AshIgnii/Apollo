@@ -1,29 +1,30 @@
 import { SlashCommandBuilder, EmbedBuilder, Snowflake, VoiceChannel } from 'discord.js';
 import { InfoData, SoundCloudStream, YouTubeStream, stream, video_basic_info } from 'play-dl';
-import { song } from '../Classes/song';
+import { track } from '../Classes/track';
 import { queue } from '../Classes/queue';
 import { AudioPlayer, AudioPlayerState, AudioPlayerStatus, AudioResource, NoSubscriberBehavior, PlayerSubscription, VoiceConnection, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from '@discordjs/voice';
 import { refreshPlayingMSG } from '../Functions/refreshPlayingMSG';
-import ytpl, { result, validateID } from '@distube/ytpl';
+import ytpl, { validateID } from '@distube/ytpl';
 import { playlist } from '../Classes/playlist';
-import { tryNextSong } from '../Functions/tryNextSong';
+import { getNextAvailableStream } from '../Functions/getNextAvailableStream';
+import { leaveIfInactive } from '../Functions/leaveIfInactive';
 
 const command = {
 	data: new SlashCommandBuilder()
 		.setName('play')
-		.setDescription('Plays music in your voice channel')
+		.setDescription('Plays a music track in your voice channel')
 		.setNameLocalizations({
 			'pt-BR': 'tocar',
 		})
 		.setDescriptionLocalizations({
-			'pt-BR': 'Toca uma musica em seu canal de voz',
+			'pt-BR': 'Toca uma música em seu canal de voz',
 		})
 		.addStringOption(option =>
 			option
 				.setName('song')
 				.setDescription('Youtube URL or search query')
 				.setNameLocalizations({
-					'pt-BR': 'musica',
+					'pt-BR': 'música',
 				})
 				.setDescriptionLocalizations({
 					'pt-BR': 'Link do Youtube ou termo de busca',
@@ -100,20 +101,20 @@ const command = {
 
 		let videoSuccess = false
 		if ((type === 'watch' || type === 'embed' || type === 'v' || type === 'e') && playlistID === undefined) {
-			const newSong: song = new song(id, interaction.member.id);
+			const newTrack: track = new track(id, interaction.member.id);
 
-			const info: InfoData = await video_basic_info(newSong.id);
+			const info: InfoData = await video_basic_info(newTrack.id);
 
 			if (info !== undefined) {
-				newSong.title = info.video_details.title;
-				newSong.durationSec = info.video_details.durationInSec;
-				newSong.thumbnailURL = info.video_details.thumbnails[0].url;
+				newTrack.title = info.video_details.title;
+				newTrack.durationSec = info.video_details.durationInSec;
+				newTrack.thumbnailURL = info.video_details.thumbnails[0].url;
 			} else {
-				newSong.title = 'No title';
-				newSong.durationSec = 0;
+				newTrack.title = 'No title';
+				newTrack.durationSec = 0;
 			}
 
-			serverQueue.addSong(newSong);
+			serverQueue.addTrack(newTrack);
 			videoSuccess = true;
 
 			const defaultEmbed = new EmbedBuilder()
@@ -122,7 +123,7 @@ const command = {
 					iconURL: interaction.client.user.avatarURL().toString(),
 				})
 				.setColor('Green')
-				.setDescription(newSong.title ?? 'No title')
+				.setDescription(newTrack.title ?? 'No title')
 				.setTimestamp(interaction.createdTimestamp);
 			const locales: any = {
 				'pt-BR': new EmbedBuilder()
@@ -131,7 +132,7 @@ const command = {
 						iconURL: interaction.client.user.avatarURL().toString(),
 					})
 					.setColor('Green')
-					.setDescription(newSong.title ?? 'No title')
+					.setDescription(newTrack.title ?? 'No title')
 					.setTimestamp(interaction.createdTimestamp),
 			};
 
@@ -165,10 +166,10 @@ const command = {
 				return;
 			} else {
 				const newPlaylist: playlist = new playlist(await ytpl(pID), interaction.member.id);
-				const songs: song[] = newPlaylist.getSongs();
+				const tracks: track[] = newPlaylist.getTracks();
 
-				if (songs.length > 0) {
-					serverQueue.addSong(songs)
+				if (tracks.length > 0) {
+					serverQueue.addTrack(tracks)
 					let pTitle = newPlaylist.title
 					let thumb = newPlaylist.thumbnailURL
 
@@ -184,7 +185,7 @@ const command = {
 					const locales: any = {
 						'pt-BR': new EmbedBuilder()
 							.setAuthor({
-								name: 'Playlist adicionado a fila!',
+								name: 'Playlist adicionada à fila!',
 								iconURL: interaction.client.user.avatarURL().toString(),
 							})
 							.setColor('Yellow')
@@ -203,8 +204,9 @@ const command = {
 		if (!serverQueue.getState('playing')) {
 			serverQueue.changeState('playing');
 
-			if (serverQueue.timeout !== null || serverQueue.timeout !== undefined) {
-				clearTimeout(serverQueue.timeout);
+			let queueTimeout = serverQueue.getLeaveTimeout();
+			if (queueTimeout !== null || queueTimeout !== undefined) {
+				clearTimeout(queueTimeout);
 			}
 
 			connection = getVoiceConnection(interaction.guildId);
@@ -225,22 +227,25 @@ const command = {
 
 			const subscription: PlayerSubscription | undefined = connection.subscribe(player);
 
-			id = serverQueue.getSong().id;
-			const audioStream: YouTubeStream | SoundCloudStream = await stream(id);
-			const resource: AudioResource = createAudioResource(audioStream.stream, {
-				inputType: audioStream.type,
-			});
+			const audioStream: YouTubeStream | SoundCloudStream | undefined = await getNextAvailableStream(serverQueue, interaction);
 
-			player.play(resource);
+			if (audioStream !== undefined) {
+				const resource: AudioResource = createAudioResource(audioStream.stream, {
+					inputType: audioStream.type,
+				});
 
-			// playing msg
-			const currentSong: song = serverQueue.getSong();
-			refreshPlayingMSG(serverQueue, interaction);
+				player.play(resource);
+
+				refreshPlayingMSG(serverQueue, interaction);
+			} else {
+				leaveIfInactive(interaction, serverQueue, subscription, connection);
+			}
 
 			player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
 				if (oldState.status == AudioPlayerStatus.Playing && newState.status == AudioPlayerStatus.Idle) {
 					if (!serverQueue.getState('paused')) {
-						const newaudioStream: YouTubeStream | SoundCloudStream | undefined = await tryNextSong(serverQueue, interaction)
+						serverQueue.shiftQueue();
+						const newaudioStream: YouTubeStream | SoundCloudStream | undefined = await getNextAvailableStream(serverQueue, interaction)
 
 						if (newaudioStream !== undefined) {
 							const newResource: AudioResource = createAudioResource(newaudioStream.stream, {
@@ -252,32 +257,10 @@ const command = {
 								player.play(newResource);
 							}
 
-							const nextSong = serverQueue.getSong();
+							const nextTrack = serverQueue.getTrack();
 							refreshPlayingMSG(serverQueue, interaction);
 						} else {
-							serverQueue.changeState('playing');
-
-							if (subscription !== undefined) {
-								subscription.unsubscribe();
-
-								player = serverQueue.getPlayer();
-								if (player !== null && player !== undefined) {
-									player.stop();
-									player = null;
-								}
-							}
-
-							serverQueue.timeout = setTimeout(() => {
-								if (!serverQueue.getState('playing')) {
-									connection = getVoiceConnection(interaction.guildId);
-									if (connection !== undefined) {
-										connection.disconnect();
-										connection.destroy();
-									}
-
-									serverQueue.setMessage(undefined);
-								}
-							}, 60000);
+							leaveIfInactive(interaction, serverQueue, subscription, connection);
 						}
 					}
 				}
