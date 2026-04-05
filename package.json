@@ -1,28 +1,34 @@
 {
-  "name": "apollorewritten",
-  "version": "0.0.1",
-  "description": "music bot",
-  "main": "index.js",
-  "scripts": {
-    "start": "ts-node src/index.ts"
-  },
-  "author": "Ash",
-  "license": "MIT",
-  "dependencies": {
-    "@discordjs/opus": "^0.9.0",
-    "@discordjs/voice": "^0.16.1",
-    "@distube/ytpl": "^1.2.1",
-    "chalk": "^4.1.2",
-    "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5",
-    "ffmpeg-static": "^5.2.0",
-    "libsodium-wrappers": "^0.7.13",
-    "play-dl": "^1.9.7"
-  },
-  "devDependencies": {
-    "eslint": "^8.57.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.4",
-    "typescript-eslint": "^7.5.0"
-  }
+    "name": "apollorewritten",
+    "version": "0.0.1",
+    "description": "music bot",
+    "main": "index.js",
+    "scripts": {
+        "start": "bun src/index.ts",
+        "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
+    },
+    "author": "Ash",
+    "license": "MIT",
+    "dependencies": {
+        "@discordjs/voice": "^0.19.2",
+        "@distube/ytpl": "^1.2.4",
+        "chalk": "^5.6.2",
+        "discord.js": "^14.26.2",
+        "dotenv": "^17.4.1",
+        "ffmpeg-static": "^5.3.0",
+        "jiti": "^2.6.1",
+        "libsodium-wrappers": "^0.8.2",
+        "mediaplex": "^1.0.0",
+        "play-dl": "^1.9.7"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.2.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.5",
+        "globals": "^17.4.0",
+        "prettier": "3.8.1",
+        "typescript": "^6.0.2",
+        "typescript-eslint": "^8.58.0"
+    }
 }
